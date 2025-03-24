@@ -1,146 +1,238 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Supply Chain Data Visualization CIS-568</title>
-    <script src="https://d3js.org/d3.v5.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: center;
-        }
-        .chart-container {
-            display: flex;
-            justify-content: center;
-        }
-        .line {
-            fill: none;
-            stroke-width: 2px;
-        }
-        .legend {
-            font-size: 14px;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Supply Chain Data Visualization CIS-568</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f2f5;
+      padding: 40px;
+      color: #222;
+    }
+
+    h2 {
+      text-align: center;
+      font-size: 28px;
+      color: #09090a;
+    }
+
+    .data-table-wrapper {
+      overflow-x: auto;
+      margin: 30px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #0b0a0a;
+      text-align: center;
+    }
+
+    .chart-holder {
+      display: flex;
+      justify-content: center;
+    }
+
+    .chart-area text {
+      font-size: 12px;
+    }
+
+    .line-path {
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .legend-item {
+      font-size: 13px;
+    }
+  </style>
 </head>
 <body>
-    <h2>Supply Chain Profit Analysis</h2>
-    <table id="profit-table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Estimated Cost</th>
-                <th>Raw Material</th>
-                <th>Workmanship</th>
-                <th>Storage Cost</th>
-                <th>Actual Cost</th>
-                <th>Sold Price</th>
-                <th>Profit Margin</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
+
+  <h2>Supply Chain Profit Analysis</h2>
+
+  <div class="data-table-wrapper">
+    <table id="supply-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Estimated Cost</th>
+          <th>Raw Material</th>
+          <th>Workmanship</th>
+          <th>Storage</th>
+          <th>Actual Cost</th>
+          <th>Sold Price</th>
+          <th>Profit Margin</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
     </table>
+  </div>
 
-    <div class="chart-container">
-        <div id="chart"></div>
-    </div>
+  <div class="chart-holder">
+    <div id="supply-chart"></div>
+  </div>
 
-    <script>
-        d3.csv("data_sample(1).csv").then(function(dataset) {
+  <script>
+    function executeSupplyChainFlow() {
+      loadData("data_sample(1).csv");
+    }
 
-            
-            const parseDate = d3.timeParse("%m/%d/%y");
+    function loadData(csvFile) {
+      d3.csv(csvFile).then(rawRows => {
+        const parsedRows = rawRows.map(parseCSVRow);
+        const enrichedData = parsedRows.map(calculateValues);
+        renderTable(enrichedData);
+        renderChart(enrichedData);
+      });
+    }
 
-            dataset.forEach(d => {
-                d.originalDate = d.date; 
-                d.date = parseDate(d.date); 
-                d.RawMaterial = +d.RawMaterial;
-                d.Workmanship = +d.Workmanship;
-                d.StorageCost = +d.StorageCost;
-                d.EstimatedCost = parseFloat(d.EstimatedCost.replace(/[^0-9.]/g, ''));
-                d.ActualCost = d.RawMaterial + d.Workmanship + d.StorageCost;
-                d.SoldPrice = d.EstimatedCost * 1.1;
-                d.ProfitMargin = d.SoldPrice - d.ActualCost;
-            });
 
-            const tableBody = d3.select("#profit-table tbody");
-            dataset.forEach(d => {
-                const row = tableBody.append("tr");
-                row.append("td").text(d.originalDate); 
-                row.append("td").text(`$${d.EstimatedCost.toFixed(2)}`);
-                row.append("td").text(`$${d.RawMaterial.toFixed(2)}`);
-                row.append("td").text(`$${d.Workmanship.toFixed(2)}`);
-                row.append("td").text(`$${d.StorageCost.toFixed(2)}`);
-                row.append("td").text(`$${d.ActualCost.toFixed(2)}`);
-                row.append("td").text(`$${d.SoldPrice.toFixed(2)}`);
-                row.append("td").text(`$${d.ProfitMargin.toFixed(2)}`);
-            });
+    function parseCSVRow(row) {
+      const parseDate = d3.timeParse("%m/%d/%y");
+      return {
+        rawDate: row.date,
+        date: parseDate(row.date),
+        rawMaterial: +row.RawMaterial,
+        workmanship: +row.Workmanship,
+        storage: +row.StorageCost,
+        estimated: parseFloat(row.EstimatedCost.replace(/[^\d.]/g, ''))
+      };
+    }
 
-            const margin = { top: 70, right: 150, bottom: 100, left: 50 },
-                width = 900 - margin.left - margin.right,
-                height = 500 - margin.top - margin.bottom;
+    function calculateValues(item) {
+      const actual = item.rawMaterial + item.workmanship + item.storage;
+      const sold = item.estimated * 1.1;
+      const profit = sold - actual;
+      return { ...item, actual, sold, profit };
+    }
 
-            const x = d3.scaleTime().domain(d3.extent(dataset, d => d.date)).range([0, width]);
-            const y = d3.scaleLinear()
-                .domain([
-                    d3.min(dataset, d => Math.min(d.EstimatedCost, d.ActualCost, d.SoldPrice, d.ProfitMargin)),
-                    d3.max(dataset, d => Math.max(d.EstimatedCost, d.ActualCost, d.SoldPrice, d.ProfitMargin))
-                ])
-                .range([height, 0]);
+    
+    function renderTable(data) {
+      const tbody = d3.select("#supply-table tbody");
+      data.forEach(row => {
+        const tr = tbody.append("tr");
+        tr.html(`
+          <td>${row.rawDate}</td>
+          <td>${formatMoney(row.estimated)}</td>
+          <td>${formatMoney(row.rawMaterial)}</td>
+          <td>${formatMoney(row.workmanship)}</td>
+          <td>${formatMoney(row.storage)}</td>
+          <td>${formatMoney(row.actual)}</td>
+          <td>${formatMoney(row.sold)}</td>
+          <td>${formatMoney(row.profit)}</td>
+        `);
+      });
+    }
 
-            const svg = d3.select("#chart").append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-                .append("g")
-                .attr("transform", `translate(${margin.left},${margin.top})`);
+    function renderChart(data) {
+      const margin = { top: 50, right: 160, bottom: 60, left: 60 };
+      const svgWidth = 960;
+      const svgHeight = 500;
+      const width = svgWidth - margin.left - margin.right;
+      const height = svgHeight - margin.top - margin.bottom;
 
-            const lines = [
-                { key: "EstimatedCost", color: "steelblue" },
-                { key: "ActualCost", color: "orange" },
-                { key: "SoldPrice", color: "green" },
-                { key: "ProfitMargin", color: "red" }
-            ];
+      const svg = d3.select("#supply-chart")
+        .append("svg")
+        .attr("width", svgWidth)
+        .attr("height", svgHeight)
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`)
+        .attr("class", "chart-area");
 
-            lines.forEach(({ key, color }) => {
-                const lineGen = d3.line()
-                    .x(d => x(d.date))
-                    .y(d => y(d[key]));
-                svg.append("path")
-                    .datum(dataset)
-                    .attr("class", "line")
-                    .attr("d", lineGen)
-                    .style("stroke", color);
-            });
+      const x = createTimeScale(data, width);
+      const y = createValueScale(data, height);
 
-            svg.append("g").attr("transform", `translate(0,${height})`)
-                .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%m/%d/%y"))); 
+      addAxes(svg, x, y, height);
+      plotLines(svg, data, x, y);
+      createLegend(svg, width);
+    }
 
-            svg.append("g").call(d3.axisLeft(y));
 
-            const legend = svg.selectAll(".legend")
-                .data(lines)
-                .enter().append("g")
-                .attr("class", "legend")
-                .attr("transform", (d, i) => `translate(${width + 20},${i * 20})`);
+    function formatMoney(value) {
+      return `$${value.toFixed(2)}`;
+    }
 
-            legend.append("rect")
-                .attr("width", 18)
-                .attr("height", 18)
-                .style("fill", d => d.color);
+    
+    function createTimeScale(data, width) {
+      return d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, width]);
+    }
 
-            legend.append("text")
-                .attr("x", 24)
-                .attr("y", 9)
-                .attr("dy", "0.35em")
-                .text(d => d.key);
-        });
-    </script>
+    
+    function createValueScale(data, height) {
+      const allValues = data.flatMap(d => [d.estimated, d.actual, d.sold, d.profit]);
+      return d3.scaleLinear()
+        .domain([d3.min(allValues), d3.max(allValues)])
+        .range([height, 0]);
+    }
+
+    function addAxes(svg, x, y, height) {
+      svg.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b %d")));
+
+      svg.append("g")
+        .call(d3.axisLeft(y));
+    }
+
+    function plotLines(svg, data, x, y) {
+      const metrics = [
+        { field: "estimated", label: "Estimated Cost", color: "#3498db" },
+        { field: "actual", label: "Actual Cost", color: "#f39c12" },
+        { field: "sold", label: "Sold Price", color: "#2ecc71" },
+        { field: "profit", label: "Profit Margin", color: "#e74c3c" }
+      ];
+
+      metrics.forEach(metric => {
+        const line = d3.line()
+          .x(d => x(d.date))
+          .y(d => y(d[metric.field]));
+
+        svg.append("path")
+          .datum(data)
+          .attr("class", "line-path")
+          .attr("stroke", metric.color)
+          .attr("d", line);
+      });
+    }
+
+    function createLegend(svg, width) {
+      const items = [
+        { label: "Estimated Cost", color: "#3498db" },
+        { label: "Actual Cost", color: "#f39c12" },
+        { label: "Sold Price", color: "#2ecc71" },
+        { label: "Profit Margin", color: "#e74c3c" }
+      ];
+
+      const legend = svg.selectAll(".legend-item")
+        .data(items)
+        .enter()
+        .append("g")
+        .attr("class", "legend-item")
+        .attr("transform", (d, i) => `translate(${width + 20}, ${i * 22})`);
+
+      legend.append("rect")
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("fill", d => d.color);
+
+      legend.append("text")
+        .attr("x", 22)
+        .attr("y", 9)
+        .attr("dy", "0.35em")
+        .text(d => d.label);
+    }
+
+    executeSupplyChainFlow();
+  </script>
+
 </body>
 </html>
